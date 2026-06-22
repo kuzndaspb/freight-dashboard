@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Сводная панель — Контейнерные фрахтовые индексы</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+  :root {
+    --bg:#0d1117;--surface:#161b22;--surface2:#1e2732;--border:#30363d;
+    --accent:#2ea5ff;--accent2:#f78166;--accent3:#3fb950;--accent4:#d2a8ff;--accent5:#ffa657;
+    --text:#e6edf3;--text-muted:#7d8590;--up:#3fb950;--down:#f78166;--warn:#ffa657;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',-apple-system,sans-serif;min-height:100vh;padding:0 0 40px}
+  header{background:linear-gradient(135deg,#0d1117,#161b22);border-bottom:1px solid var(--border);padding:18px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+  .header-left h1{font-size:1.25rem;font-weight:700;letter-spacing:-.3px}
+  .header-left p{font-size:.75rem;color:var(--text-muted);margin-top:2px}
+  .header-right{text-align:right}
+  .date-now{font-size:1.1rem;font-weight:700;color:var(--accent)}
+  .usd-rub{font-size:.8rem;color:var(--text-muted);margin-top:3px}
+  .usd-rub span{color:var(--warn);font-weight:600}
+  .source-badge{display:inline-block;background:rgba(46,165,255,.12);color:var(--accent);font-size:.65rem;padding:2px 8px;border-radius:20px;border:1px solid rgba(46,165,255,.25);margin-left:8px;vertical-align:middle}
+  .container{max-width:1400px;margin:0 auto;padding:28px 32px 0}
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:28px}
+  .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;transition:transform .15s,border-color .15s}
+  .kpi-card:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--kpi-color,var(--accent))}
+  .kpi-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .kpi-route{font-size:.78rem;color:var(--text-muted);margin-bottom:4px}
+  .kpi-value{font-size:1.5rem;font-weight:700;line-height:1.1}
+  .kpi-unit{font-size:.7rem;color:var(--text-muted);font-weight:400;margin-left:2px}
+  .kpi-change{margin-top:6px;font-size:.75rem;font-weight:600;display:flex;align-items:center;gap:4px}
+  .kpi-change.up{color:var(--up)}.kpi-change.down{color:var(--down)}.kpi-change.neutral{color:var(--text-muted)}
+  .kpi-date{font-size:.65rem;color:var(--text-muted);margin-top:4px}
+  .section-title{font-size:.85rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin:28px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+  .section-title .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+  .chart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(580px,1fr));gap:18px;margin-bottom:28px}
+  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px 20px}
+  .chart-card.full{grid-column:1/-1}
+  .chart-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+  .chart-title{font-size:.95rem;font-weight:600}
+  .chart-subtitle{font-size:.72rem;color:var(--text-muted);margin-top:2px}
+  .chart-badge{font-size:.65rem;padding:3px 8px;border-radius:20px;font-weight:600}
+  .badge-up{background:rgba(63,185,80,.15);color:var(--up);border:1px solid rgba(63,185,80,.3)}
+  .badge-down{background:rgba(247,129,102,.15);color:var(--down);border:1px solid rgba(247,129,102,.3)}
+  .badge-neutral{background:rgba(255,166,87,.15);color:var(--warn);border:1px solid rgba(255,166,87,.3)}
+  .chart-wrap{position:relative;height:240px}
+  .chart-wrap.tall{height:300px}
+  .forecast-box{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:16px 20px;margin-top:16px}
+  .forecast-box h4{font-size:.78rem;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+  .forecast-box p{font-size:.82rem;color:var(--text-muted);line-height:1.6}
+  .forecast-box p strong{color:var(--text)}
+  .forecast-tag{display:inline-block;font-size:.7rem;padding:2px 8px;border-radius:4px;margin-top:6px;font-weight:600}
+  .tag-bull{background:rgba(63,185,80,.15);color:var(--up)}
+  .tag-bear{background:rgba(247,129,102,.15);color:var(--down)}
+  .tag-mix{background:rgba(255,166,87,.15);color:var(--warn)}
+  .data-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:12px}
+  .data-table th{background:var(--surface2);color:var(--text-muted);font-weight:600;padding:10px 14px;text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+  .data-table td{padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.5)}
+  .data-table tr:last-child td{border-bottom:none}
+  .data-table tr:hover td{background:rgba(46,165,255,.04)}
+  .td-up{color:var(--up);font-weight:600}.td-down{color:var(--down);font-weight:600}
+  .update-bar{background:rgba(46,165,255,.08);border:1px solid rgba(46,165,255,.2);border-radius:8px;padding:8px 16px;font-size:.75rem;color:var(--text-muted);margin-bottom:20px;display:flex;align-items:center;gap:8px}
+  .update-bar .dot-live{width:7px;height:7px;border-radius:50%;background:var(--up);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  footer{text-align:center;font-size:.72rem;color:var(--text-muted);padding:28px 32px 0;border-top:1px solid var(--border);margin-top:32px}
+  footer a{color:var(--accent);text-decoration:none}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+  .legend-item{display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--text-muted)}
+  .legend-line{width:20px;height:2px;border-radius:1px}
+  .legend-dash{width:20px;height:2px;border-radius:1px;border-top:2px dashed}
+  @media(max-width:768px){header{padding:14px 16px}.container{padding:16px 16px 0}.chart-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}.chart-wrap{height:200px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>🚢 Контейнерные фрахтовые индексы</h1>
+    <p>Ключевые маршруты Китай → мир · Drewry WCI · SCFI · IACI</p>
+  </div>
+  <div class="header-right">
+    <div class="date-now" id="dateNow"></div>
+    <div class="usd-rub">USD / RUB &nbsp;·&nbsp; <span id="usdRub">…</span> руб. <span id="usdRubMeta" style="color:var(--text-muted);font-weight:400">(загрузка…)</span></div>
+    <div style="margin-top:4px">
+      <span class="source-badge">Drewry WCI</span>
+      <span class="source-badge">SCFI</span>
+      <span class="source-badge">auto-update</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="update-bar"><span class="dot-live"></span><span id="updateBar">Загрузка данных…</span></div>
+
+  <div class="section-title"><span class="dot"></span> Текущие ставки на ключевых маршрутах</div>
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <div class="section-title"><span class="dot" style="background:var(--accent4)"></span> Динамика ставок — последние недели (USD/FEU, 40ft)</div>
+  <div class="chart-card" style="margin-bottom:18px;overflow-x:auto">
+    <table class="data-table" id="ratesTable"></table>
+  </div>
+
+  <div class="section-title"><span class="dot" style="background:var(--accent3)"></span> Графики + прогноз на 4 недели</div>
+  <div class="chart-grid">
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">🇨🇳 Китай (баз. порты) → 🇳🇱 Роттердам</div>
+          <div class="chart-subtitle">Drewry WCI · Shanghai–Rotterdam · USD/FEU</div>
+        </div>
+        <span class="chart-badge badge-up" id="badge-rot">загрузка…</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chartRot"></canvas></div>
+      <div class="forecast-box">
+        <h4>📊 Прогноз на 2–4 недели</h4>
+        <p><strong>Сценарий базовый:</strong> Ставки продолжат рост до <strong>~$4 800–5 200/FEU</strong> к началу июля на фоне пикового сезона и PSS-надбавок. Форвардные контракты INE указывают на $5 000–6 500 в июле.<br>
+        <strong>Риски вниз:</strong> американо-иранское перемирие снимает геополитическую премию — возможна коррекция 10–15% в августе.</p>
+        <span class="forecast-tag tag-bull">📈 Бычий — краткосрочно</span>
+        <span class="forecast-tag tag-mix" style="margin-left:6px">⚡ Коррекция — август</span>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">🌎 Южная Америка → 🇳🇱 Роттердам</div>
+          <div class="chart-subtitle">Drewry WCI SAM–EUR · USD/FEU (40ft)</div>
+        </div>
+        <span class="chart-badge badge-up" id="badge-sam">загрузка…</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chartSam"></canvas></div>
+      <div class="forecast-box">
+        <h4>📊 Прогноз на 2–4 недели</h4>
+        <p><strong>Маршрут:</strong> Южная Америка (Сантос, Буэнос-Айрес) → Роттердам. Корреляция с аналогичным ростом на Азия-Европа с лагом 2–3 недели. Текущий диапазон <strong>$2 500–3 200/FEU</strong>.<br>
+        <strong>Прогноз:</strong> Умеренный рост вслед за пиковым сезоном Северного полушария. Бразильский агроэкспорт поддерживает загрузку судов.</p>
+        <span class="forecast-tag tag-bull">📈 Умеренный рост</span>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">🇨🇳 Китай (баз. порты) → 🇷🇺 Владивосток</div>
+          <div class="chart-subtitle">NCFI (Нинбоская биржа, msri.cn) · при недоступности — Drewry IACI × 1.6 · USD/FEU</div>
+        </div>
+        <span class="chart-badge badge-neutral" id="badge-vla">загрузка…</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chartVla"></canvas></div>
+      <div class="forecast-box">
+        <h4>📊 Прогноз на 2–4 недели</h4>
+        <p><strong>Маршрут:</strong> Шанхай/Нингбо → Владивосток (~2 200 км). Ставки стабильны. IACI Drewry = индикатор.<br>
+        <strong>Прогноз:</strong> Рост не более 5–8%. Ограничен санкционным комплаенсом и числом прямых линий.</p>
+        <span class="forecast-tag tag-mix">➡️ Боковое движение</span>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">🇨🇳 Китай → 🇷🇺 Санкт-Петербург</div>
+          <div class="chart-subtitle">Через Владивосток + РЖД / Новороссийск · USD/FEU (оценочно)</div>
+        </div>
+        <span class="chart-badge badge-up" id="badge-spb">загрузка…</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chartSpb"></canvas></div>
+      <div class="forecast-box">
+        <h4>📊 Прогноз на 2–4 недели</h4>
+        <p><strong>Маршрут:</strong> Нет прямого сервиса. Морское плечо до Владивостока + транзит РЖД. Диапазон: <strong>$3 500–6 500/FEU</strong>.<br>
+        <strong>Прогноз:</strong> Рост вслед за мировым рынком. Ожидаем <strong>+10–15%</strong> к концу июля.</p>
+        <span class="forecast-tag tag-bull">📈 Рост давления</span>
+      </div>
+    </div>
+
+    <div class="chart-card full">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">🌐 Drewry WCI (комплексный) + SCFI (комплексный) — история + прогноз</div>
+          <div class="chart-subtitle">WCI: средний мировой индекс · SCFI: шанхайский экспортный · USD/FEU / пункты</div>
+        </div>
+        <span class="chart-badge badge-up" id="badge-main">загрузка…</span>
+      </div>
+      <div class="legend" id="mainLegend"></div>
+      <div class="chart-wrap tall"><canvas id="chartMain"></canvas></div>
+      <div class="forecast-box" style="border-left-color:var(--accent3)">
+        <h4>📊 Сводный прогноз рынка — июль 2026</h4>
+        <p>
+          <strong>WCI</strong> может достичь <strong>$5 000–5 500/FEU</strong> к концу июля: пиковый сезон, PSS-надбавки, 6 blank sailings на транстихоокеанском направлении.<br>
+          <strong>SCFI</strong> ожидается в диапазоне <strong>3 400–3 800 пунктов</strong> к 3–4 нед. июля.<br>
+          <strong>Ключевые риски:</strong> нормализация американо-иранских отношений → снижение геополитической премии; большой объём новых судов в конце 2026 → избыток тоннажа; корректировка тарифов США после 1 июля.<br>
+          <strong>Вывод:</strong> краткосрочно — бычий тренд (2–3 нед.), среднесрочно — коррекция в августе–сентябре на 20–30%.
+        </p>
+        <span class="forecast-tag tag-bull">📈 Июль: рост</span>
+        <span class="forecast-tag tag-bear" style="margin-left:6px">📉 Авг–Сент: коррекция</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  Данные: <a href="https://www.drewry.co.uk" target="_blank">Drewry WCI</a> ·
+  <a href="https://en.sse.net.cn" target="_blank">SSE SCFI</a> ·
+  USD/RUB: <a href="https://open.er-api.com" target="_blank">open.er-api.com</a> (live) ·
+  индексы: обновляются автоматически каждую пятницу (GitHub Actions)<br>
+  Прогноз носит аналитический характер и не является инвестиционной рекомендацией.
+</footer>
+
+<!-- ══════════════════════ SCRIPTS ══════════════════════ -->
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════
+// ВСТРОЕННЫЕ ДАННЫЕ — fallback если data.json недоступен
+// ═══════════════════════════════════════════════════════
+const FALLBACK_DATA = {
+  updated: "22.06.2026 10:00 UTC",
+  usd_rub: 73.0,
+  indices: {
+    wci_composite:  { dates: ["02.03","09.03","16.03","23.03","30.03","06.04","13.04","20.04","27.04","04.05","11.05","18.05","25.05","01.06","08.06","18.06"], values: [2050,2090,2140,2180,2279,2310,2340,2390,2440,2600,2750,2950,3100,3230,3433,3969] },
+    wci_rotterdam:  { dates: ["02.03","09.03","16.03","23.03","30.03","06.04","13.04","20.04","27.04","04.05","11.05","18.05","25.05","01.06","08.06","18.06"], values: [2380,2430,2495,2552,2620,2710,2730,2780,2850,2980,3100,3280,3433,3620,3760,4342] },
+    scfi_composite: { dates: ["02.03","09.03","16.03","23.03","30.03","06.04","13.04","20.04","27.04","04.05","11.05","18.05","25.05","01.06","08.06","18.06"], values: [1333,1400,1489,1710,1827,1855,1875,1890,1875,1954,2141,2218,2571,2726,2985,3122] },
+    sam_rotterdam:  { dates: ["02.03","09.03","16.03","23.03","30.03","06.04","13.04","20.04","27.04","04.05","11.05","18.05","25.05","01.06","08.06","18.06"], values: [1720,1750,1790,1820,1880,1900,1930,1950,1970,2060,2150,2250,2420,2500,2600,2750] },
+    china_vlad:     { dates: ["02.03","09.03","16.03","23.03","30.03","06.04","13.04","20.04","27.04","04.05","11.05","18.05","25.05","01.06","08.06","22.06"], values: [1200,1230,1260,1300,1350,1380,1420,1460,1490,1530,1580,1640,1700,1720,1760,1800] },
+    spb_est:        { dates: ["02.03","09.03","16.03","23.03","30.03","06.04","13.04","20.04","27.04","04.05","11.05","18.05","25.05","01.06","08.06","22.06"], values: [4800,4900,5000,5100,5200,5400,5600,5800,5900,6000,6200,6500,6800,7000,7200,7400] }
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// УТИЛИТЫ
+// ═══════════════════════════════════════════════════════
+function setDate() {
+  const now = new Date();
+  const days = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  document.getElementById('dateNow').textContent =
+    `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()} · ${days[now.getDay()]}`;
+}
+setDate(); setInterval(setDate, 60000);
+
+// ═══════════════════════════════════════════════════════
+// ЗАГРУЗКА data.json
+// ═══════════════════════════════════════════════════════
+async function loadData() {
+  try {
+    const r = await fetch(`data.json?v=${Date.now()}`, { signal: AbortSignal.timeout(6000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch(e) {
+    console.warn('[data.json]', e.message, '→ используем встроенные данные');
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// LIVE КУРС USD/RUB
+// ═══════════════════════════════════════════════════════
+async function loadUsdRub(fallbackRate) {
+  const elRate = document.getElementById('usdRub');
+  const elMeta = document.getElementById('usdRubMeta');
+  elRate.style.opacity = '0.5';
+
+  // Попытка 1
+  try {
+    const r = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.result === 'success' && d.rates?.RUB) {
+        const rate = d.rates.RUB.toFixed(2);
+        elRate.textContent = rate; elRate.style.opacity = '1';
+        elMeta.textContent = '(live · open.er-api.com)';
+        updateKpiUsdRub(rate); return;
+      }
+    }
+  } catch(e) {}
+
+  // Попытка 2
+  try {
+    const r = await fetch('https://api.frankfurter.app/latest?from=USD&to=RUB', { signal: AbortSignal.timeout(5000) });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.rates?.RUB) {
+        const rate = d.rates.RUB.toFixed(2);
+        elRate.textContent = rate; elRate.style.opacity = '1';
+        elMeta.textContent = '(ECB · frankfurter.app)';
+        updateKpiUsdRub(rate); return;
+      }
+    }
+  } catch(e) {}
+
+  // Fallback из data.json
+  elRate.textContent = fallbackRate || '73.00';
+  elRate.style.opacity = '1';
+  elMeta.textContent = '(из data.json)';
+}
+
+function updateKpiUsdRub(rate) {
+  document.querySelectorAll('.kpi-card').forEach(card => {
+    if (card.querySelector('.kpi-label')?.textContent.includes('USD / RUB')) {
+      const v = card.querySelector('.kpi-value');
+      if (v) v.childNodes[0].textContent = rate;
+      const d = card.querySelector('.kpi-date');
+      const now = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      if (d) d.textContent = `Данные: ${pad(now.getDate())}.${pad(now.getMonth()+1)}.${now.getFullYear()} · live`;
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// CHART.JS НАСТРОЙКИ
+// ═══════════════════════════════════════════════════════
+Chart.defaults.color = '#7d8590';
+Chart.defaults.borderColor = '#30363d';
+Chart.defaults.font.family = "'Segoe UI', sans-serif";
+Chart.defaults.font.size = 11;
+
+const gridOpts = { color: 'rgba(48,54,61,0.6)', tickColor: 'transparent' };
+const tooltipStyle = {
+  backgroundColor: '#161b22', borderColor: '#30363d', borderWidth: 1,
+  titleColor: '#e6edf3', bodyColor: '#7d8590', padding: 10, cornerRadius: 8
+};
+
+function makeDatasets(wDates, hist, fcVals, color, label) {
+  const fcDates = genForecastDates(wDates, 4);
+  const hData = hist.map((v,i) => ({ x: wDates[i], y: v }));
+  const fData = [
+    { x: wDates[wDates.length-1], y: hist[hist.length-1] },
+    ...fcVals.map((v,i) => ({ x: fcDates[i], y: v }))
+  ];
+  return [
+    { label: label+' (факт)', data: hData, borderColor: color, backgroundColor: 'transparent',
+      tension: 0.35, borderWidth: 2.5, pointRadius: 3, pointHoverRadius: 6, pointBackgroundColor: color },
+    { label: label+' (прогноз)', data: fData, borderColor: color, backgroundColor: 'transparent',
+      tension: 0.35, borderWidth: 2, pointRadius: 4, pointHoverRadius: 6,
+      pointBackgroundColor: '#0d1117', pointBorderColor: color, pointBorderWidth: 2, borderDash: [6,4] }
+  ];
+}
+
+function genForecastDates(wDates, n) {
+  // Берём последнюю дату и добавляем по 7 дней
+  const lastStr = wDates[wDates.length - 1]; // DD.MM
+  const year = new Date().getFullYear();
+  const [dd, mm] = lastStr.split('.').map(Number);
+  const last = new Date(year, mm - 1, dd);
+  const result = [];
+  for (let i = 1; i <= n; i++) {
+    const d = new Date(last);
+    d.setDate(d.getDate() + i * 7);
+    result.push(`${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  return result;
+}
+
+function buildLineChart(id, wDates, datasets, yLabel = 'USD/FEU') {
+  const fcDates = genForecastDates(wDates, 4);
+  const allLabels = [...wDates, ...fcDates];
+  const lastFact = wDates[wDates.length - 1];
+  return new Chart(document.getElementById(id).getContext('2d'), {
+    type: 'line',
+    data: { labels: allLabels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { ...tooltipStyle, callbacks: { label: c => `  ${c.dataset.label}: $${c.parsed.y.toLocaleString()}` } },
+        annotation: { annotations: { line1: {
+          type: 'line', xMin: lastFact, xMax: lastFact,
+          borderColor: 'rgba(46,165,255,0.35)', borderWidth: 1.5, borderDash: [4,4],
+          label: { content: '← факт | прогноз →', display: true, color: '#2ea5ff',
+            font: { size: 10 }, position: 'center', backgroundColor: 'rgba(13,17,23,0.8)' }
+        }}}
+      },
+      scales: {
+        x: { grid: gridOpts, ticks: { maxTicksLimit: 10, maxRotation: 45 } },
+        y: { grid: gridOpts,
+          title: { display: true, text: yLabel, color: '#7d8590', font: { size: 10 } },
+          ticks: { callback: v => '$' + v.toLocaleString() }
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// ПРОГНОЗ — простая линейная экстраполяция последних 4 точек
+// ═══════════════════════════════════════════════════════
+function forecast(values, steps = 4) {
+  const n = Math.min(4, values.length);
+  const recent = values.slice(-n);
+  const trend = (recent[recent.length-1] - recent[0]) / (n - 1 || 1);
+  const last = values[values.length - 1];
+  return Array.from({ length: steps }, (_, i) =>
+    Math.round(last + trend * (i + 1))
+  );
+}
+
+function pct(values) {
+  if (values.length < 2) return null;
+  const a = values[values.length - 2], b = values[values.length - 1];
+  return ((b - a) / a * 100).toFixed(1);
+}
+
+function badgeHtml(p) {
+  if (p === null) return '';
+  const cls = p > 0 ? 'badge-up' : p < 0 ? 'badge-down' : 'badge-neutral';
+  const arrow = p > 0 ? '▲' : p < 0 ? '▼' : '—';
+  return `<span class="chart-badge ${cls}">${arrow} ${p > 0 ? '+' : ''}${p}%</span>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// РЕНДЕР ДАШБОРДА
+// ═══════════════════════════════════════════════════════
+function buildDashboard(D) {
+  const I = D.indices;
+  const wDates   = I.wci_composite.dates;
+  const wciComp  = I.wci_composite.values;
+  const wciRot   = I.wci_rotterdam.values;
+  const scfiComp = I.scfi_composite.values;
+  const scfiSam  = I.sam_rotterdam.values;
+  const rateVla  = I.china_vlad.values;
+  const rateSpb  = I.spb_est.values;
+
+  const lastDate = wDates[wDates.length - 1] + '.' + new Date().getFullYear();
+
+  // Обновляем статус-бар
+  const source = D._source === 'remote' ? '🟢 data.json загружен' : '🟡 встроенные данные (fallback)';
+  document.getElementById('updateBar').textContent =
+    `${source} · Последнее обновление индексов: ${D.updated || 'неизвестно'}`;
+
+  // Бейджи изменений
+  document.getElementById('badge-rot').outerHTML  = badgeHtml(pct(wciRot))   || document.getElementById('badge-rot').outerHTML;
+  document.getElementById('badge-sam').outerHTML  = badgeHtml(pct(scfiSam))  || '';
+  document.getElementById('badge-vla').outerHTML  = badgeHtml(pct(rateVla))  || '';
+  document.getElementById('badge-spb').outerHTML  = badgeHtml(pct(rateSpb))  || '';
+  document.getElementById('badge-main').outerHTML = badgeHtml(pct(wciComp))  || '';
+
+  // ── KPI карточки ──────────────────────────────────────
+  const kpiDefs = [
+    { label:'WCI (мировой)',           route:'🌐 Все маршруты',              vals:wciComp,  unit:'USD/FEU', color:'#2ea5ff' },
+    { label:'SCFI (Шанхай, компл.)',   route:'🇨🇳 Все экспортные линии',    vals:scfiComp, unit:'пункты',  color:'#ffa657' },
+    { label:'Шанхай → Роттердам',      route:'🇨🇳 → 🇳🇱 Китай–Европа',      vals:wciRot,   unit:'USD/FEU', color:'#58a6ff' },
+    { label:'Юж. Америка → Роттердам', route:'🌎 → 🇳🇱 SAM–EUR',            vals:scfiSam,  unit:'USD/FEU', color:'#f78166' },
+    { label:'Китай → Владивосток',     route:'🇨🇳 → 🇷🇺 NCFI · msri.cn',        vals:rateVla,  unit:'USD/FEU', color:'#3fb950' },
+    { label:'Китай → СПб (оценочно)', route:'🇨🇳 → 🇷🇺 Vlad+РЖД',           vals:rateSpb,  unit:'USD/FEU', color:'#d2a8ff' },
+    { label:'USD / RUB',               route:'💵 Курс (live)',               vals:[D.usd_rub||73], unit:'руб.', color:'#ffa657', isLive:true },
+  ];
+
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = '';
+  kpiDefs.forEach(k => {
+    const last = k.vals[k.vals.length - 1];
+    const prev = k.vals.length > 1 ? k.vals[k.vals.length - 2] : null;
+    const chgNum = prev ? ((last - prev) / prev * 100) : 0;
+    const dir = chgNum > 0.5 ? 'up' : chgNum < -0.5 ? 'down' : 'neutral';
+    const chgStr = prev ? `${chgNum > 0 ? '+' : ''}${chgNum.toFixed(1)}%` : '—';
+    const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '—';
+
+    const card = document.createElement('div');
+    card.className = 'kpi-card';
+    card.style.setProperty('--kpi-color', k.color);
+    card.innerHTML = `
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-route">${k.route}</div>
+      <div class="kpi-value">${k.isLive ? '…' : last.toLocaleString()}<span class="kpi-unit">${k.unit}</span></div>
+      <div class="kpi-change ${dir}">${arrow} ${k.isLive ? 'загрузка' : chgStr}</div>
+      <div class="kpi-date">Данные: ${k.isLive ? 'обновляется…' : lastDate}</div>
+    `;
+    grid.appendChild(card);
+  });
+
+  // ── Таблица последних 10 недель ───────────────────────
+  const N = 10;
+  const tDates = wDates.slice(-N);
+  const tableRows = [
+    { name:'WCI комплексный',        data:wciComp.slice(-N),  color:'#2ea5ff', unit:'/FEU' },
+    { name:'SCFI комплексный',       data:scfiComp.slice(-N), color:'#ffa657', unit:' пт'  },
+    { name:'Шанхай→Роттердам',      data:wciRot.slice(-N),   color:'#58a6ff', unit:'/FEU' },
+    { name:'ЮАМ→Роттердам',         data:scfiSam.slice(-N),  color:'#f78166', unit:'/FEU' },
+    { name:'Китай→Владивосток',     data:rateVla.slice(-N),  color:'#3fb950', unit:'/FEU' },
+    { name:'Китай→СПб',             data:rateSpb.slice(-N),  color:'#d2a8ff', unit:'/FEU' },
+  ];
+  let thead = '<thead><tr><th>Маршрут</th>';
+  tDates.forEach(d => thead += `<th>${d}</th>`);
+  thead += '<th>Изм. нед.</th></tr></thead>';
+  let tbody = '<tbody>';
+  tableRows.forEach(r => {
+    const last = r.data[r.data.length-1], prev = r.data[r.data.length-2];
+    const chg = prev ? (((last-prev)/prev)*100).toFixed(1) : '—';
+    const cls = chg > 0 ? 'td-up' : chg < 0 ? 'td-down' : '';
+    tbody += `<tr><td style="color:${r.color};font-weight:600">${r.name}</td>`;
+    r.data.forEach(v => tbody += `<td>$${v.toLocaleString()}${r.unit}</td>`);
+    tbody += `<td class="${cls}">${chg > 0?'▲':chg < 0?'▼':''} ${chg}%</td></tr>`;
+  });
+  document.getElementById('ratesTable').innerHTML = thead + tbody + '</tbody>';
+
+  // ── Графики ───────────────────────────────────────────
+  buildLineChart('chartRot', wDates, makeDatasets(wDates, wciRot,   forecast(wciRot),   '#2ea5ff', 'Шанхай–Роттердам'));
+  buildLineChart('chartSam', wDates, makeDatasets(wDates, scfiSam,  forecast(scfiSam),  '#f78166', 'ЮАМ–Роттердам'), 'USD/FEU');
+  buildLineChart('chartVla', wDates, makeDatasets(wDates, rateVla,  forecast(rateVla),  '#3fb950', 'Шанхай–Владивосток'));
+  buildLineChart('chartSpb', wDates, makeDatasets(wDates, rateSpb,  forecast(rateSpb),  '#d2a8ff', 'Китай–СПб'));
+
+  const fcDates = genForecastDates(wDates, 4);
+  const allLabels = [...wDates, ...fcDates];
+  const lastFact = wDates[wDates.length - 1];
+  new Chart(document.getElementById('chartMain').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: allLabels,
+      datasets: [
+        ...makeDatasets(wDates, wciComp,  forecast(wciComp),  '#2ea5ff', 'WCI'),
+        ...makeDatasets(wDates, scfiComp, forecast(scfiComp), '#ffa657', 'SCFI'),
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { ...tooltipStyle, callbacks: { label: c => `  ${c.dataset.label}: $${c.parsed.y.toLocaleString()}` } },
+        annotation: { annotations: { line1: {
+          type: 'line', xMin: lastFact, xMax: lastFact,
+          borderColor: 'rgba(46,165,255,0.4)', borderWidth: 1.5, borderDash: [4,4],
+          label: { content: '← факт | прогноз →', display: true, color: '#2ea5ff',
+            font: { size: 10 }, position: 'center', backgroundColor: 'rgba(13,17,23,0.8)' }
+        }}}
+      },
+      scales: {
+        x: { grid: gridOpts, ticks: { maxTicksLimit: 12, maxRotation: 45 } },
+        y: { grid: gridOpts,
+          title: { display: true, text: 'USD/FEU · пункты (SCFI)', color: '#7d8590', font: { size: 10 } },
+          ticks: { callback: v => v >= 1000 ? (v/1000).toFixed(1)+'K' : v }
+        }
+      }
+    }
+  });
+
+  document.getElementById('mainLegend').innerHTML = `
+    <div class="legend-item"><div class="legend-line" style="background:#2ea5ff"></div> WCI (факт)</div>
+    <div class="legend-item"><div class="legend-dash" style="border-color:#2ea5ff"></div> WCI (прогноз)</div>
+    <div class="legend-item"><div class="legend-line" style="background:#ffa657"></div> SCFI (факт)</div>
+    <div class="legend-item"><div class="legend-dash" style="border-color:#ffa657"></div> SCFI (прогноз)</div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// ТОЧКА ВХОДА
+// ═══════════════════════════════════════════════════════
+async function init() {
+  const remote = await loadData();
+  const D = remote ? { ...remote, _source: 'remote' } : { ...FALLBACK_DATA, _source: 'fallback' };
+  buildDashboard(D);
+  // Live курс поверх данных из json
+  loadUsdRub(D.usd_rub);
+  setInterval(() => loadUsdRub(D.usd_rub), 15 * 60 * 1000);
+}
+
+init();
+</script>
+</body>
+</html>
