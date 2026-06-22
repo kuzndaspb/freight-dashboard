@@ -1,0 +1,49 @@
+name: Update Freight Indices
+
+on:
+  # Понедельник 07:00 UTC (10:00 МСК) и Четверг 07:00 UTC (10:00 МСК)
+  # Четверг — выходят свежие данные Drewry WCI и SCFI
+  # Понедельник — подхватываем возможные пятничные обновления
+  schedule:
+    - cron: '0 7 * * 1'   # понедельник
+    - cron: '0 7 * * 4'   # четверг
+
+  # Ручной запуск из GitHub UI (кнопка "Run workflow")
+  workflow_dispatch:
+
+permissions:
+  contents: write   # нужно чтобы бот мог делать git push
+
+jobs:
+  fetch-and-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Клонируем репозиторий
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Устанавливаем Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Устанавливаем зависимости
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      # 4. Запускаем скрипт парсинга
+      - name: Fetch freight indices
+
+        run: python fetch_indices.py
+
+      # 5. Коммитим обновлённый data.json (если есть изменения)
+      - name: Commit updated data.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          # Коммитим только если файл реально изменился
+          git diff --cached --quiet || git commit -m "auto: update freight indices $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
